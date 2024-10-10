@@ -452,76 +452,6 @@ export default class PubSubApiClient {
   }
 
   /**
-   * Publishes a payload to a topic using the gRPC client.
-   * @param {string} topicName name of the topic that we're subscribing to
-   * @param {Object} payload
-   * @param {string} [correlationKey] optional correlation key. If you don't provide one, we'll generate a random UUID for you.
-   * @returns {Promise<PublishResult>} Promise holding a PublishResult object with replayId and correlationKey
-   * @memberof PubSubApiClient.prototype
-   */
-  // @ts-ignore
-  async publish(topicName, payload, correlationKey) {
-    try {
-      if (!this.#client) {
-        throw new Error("Pub/Sub API client is not connected.");
-      }
-      const schema = await this.#fetchEventSchemaFromTopicNameWithClient(
-        topicName
-      );
-
-      const id = correlationKey ? correlationKey : crypto.randomUUID();
-      const response = await new Promise((resolve, reject) => {
-        this.#client.Publish(
-          {
-            topicName,
-            events: [
-              {
-                id, // Correlation key
-                // @ts-ignore
-                schemaId: schema.id,
-                // @ts-ignore
-                payload: schema.type.toBuffer(payload),
-              },
-            ],
-          },
-          // @ts-ignore
-          (err, response) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(response);
-            }
-          }
-        );
-      });
-      // @ts-ignore
-      const result = response.results[0];
-      result.replayId = decodeReplayId(result.replayId);
-      return result;
-    } catch (error) {
-      // @ts-ignore
-      throw new Error(`Failed to publish event for topic ${topicName}`, {
-        cause: error,
-      });
-    }
-  }
-
-  /**
-   * Closes the gRPC connection. The client will no longer receive events for any topic.
-   * @memberof PubSubApiClient.prototype
-   */
-  close() {
-    this.#logger.info("Clear subscriptions");
-    this.#subscriptions.forEach((subscription) => {
-      subscription.removeAllListeners();
-    });
-    this.#subscriptions.clear();
-
-    this.#logger.info("Closing gRPC stream");
-    this.#client.close();
-  }
-
-  /**
    * Retrieves an event schema from the cache based on its ID.
    * If it's not cached, fetches the shema with the gRPC client.
    * @param {string} schemaId ID of the schema that we're fetching
@@ -542,37 +472,6 @@ export default class PubSubApiClient {
       }
     }
     return schema;
-  }
-
-  /**
-   * Requests the event schema for a topic using the gRPC client
-   * @param {string} topicName name of the topic that we're fetching
-   * @returns {Promise<Schema>} Promise holding parsed event schema
-   */
-  // @ts-ignore
-  async #fetchEventSchemaFromTopicNameWithClient(topicName) {
-    return new Promise((resolve, reject) => {
-      // Query topic to obtain schema ID
-    // @ts-ignore
-      this.#client.GetTopic({ topicName }, async (topicError, response) => {
-        if (topicError) {
-          reject(topicError);
-        } else {
-          const { schemaId } = response;
-          // Check cache for schema thanks to ID
-          let schema = this.#schemaChache.getFromId(schemaId);
-          if (!schema) {
-            // Fetch schema with gRPC client
-            schema = await this.#fetchEventSchemaFromIdWithClient(schemaId);
-            console.log("fetchEventSchemaFromTopicNameWithClient");
-          }
-          this.#logger.info(`Topic schema loaded: ${topicName}`);
-          // Add schema to cache
-          this.#schemaChache.set(schema);
-          resolve(schema);
-        }
-      });
-    });
   }
 
   /**
