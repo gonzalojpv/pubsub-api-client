@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import fs from "fs";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
@@ -7,8 +6,6 @@ import avro from "avro-js";
 // @ts-ignore
 import certifi from "certifi";
 // eslint-disable-next-line no-unused-vars
-import { EventEmitter } from "events";
-// eslint-disable-next-line no-unused-vars
 import { connectivityState } from "@grpc/grpc-js";
 
 import SchemaCache from "./utils/schemaCache";
@@ -16,6 +13,9 @@ import EventParseError from "./utils/eventParseError";
 import PubSubEventEmitter from "./utils/pubSubEventEmitter";
 import { CustomLongAvroType } from "./utils/avroHelper";
 import Configuration from "./utils/configuration";
+import {
+  PubSubClient, FetchRequest
+} from './pubsub_api'
 import {
   parseEvent,
   encodeReplayId,
@@ -205,10 +205,12 @@ export default class PubSubApiClient {
       );
 
       // Return pub/sub gRPC client
-      this.#client = new sfdcPackage.PubSub(
-        Configuration.getPubSubEndpoint(),
-        combCreds
-      );
+      // this.#client = new sfdcPackage.PubSub(
+      //   Configuration.getPubSubEndpoint(),
+      //   combCreds
+      // );
+      // @ts-ignore
+      this.#client = new PubSubClient(Configuration.getPubSubEndpoint(), combCreds)
       this.#logger.info(
         `Connected to Pub/Sub API endpoint ${Configuration.getPubSubEndpoint()}`
       );
@@ -285,6 +287,7 @@ export default class PubSubApiClient {
    */
   // @ts-ignore
   async #subscribe(subscribeRequest) {
+    console.log("subscribeRequest:", subscribeRequest); 
     let { topicName, numRequested } = subscribeRequest;
     try {
       // Check number of requested events
@@ -319,11 +322,12 @@ export default class PubSubApiClient {
 
       // Send subscription request
       if (!subscription) {
-        subscription = this.#client.Subscribe();
+        subscription = this.#client.subscribe();
         this.#subscriptions.set(topicName, subscription);
       }
-
-      subscription.write(subscribeRequest);
+      console.log("subscribeRequest:", subscribeRequest);
+      const subscribeRequest2 = FetchRequest.fromPartial(subscribeRequest);
+      subscription.write(subscribeRequest2);
       this.#logger.info(
         `Subscribe request sent for ${numRequested} events from ${topicName}...`
       );
@@ -346,7 +350,8 @@ export default class PubSubApiClient {
               // Parse event thanks to schema
               console.log("Step-1", schema);
               console.log("Step-2", event);
-              const parsedEvent = parseEvent(schema, event);
+              // @ts-ignore
+              const parsedEvent = parseEvent(schema, event, console);
               this.#logger.debug(parsedEvent);
               eventEmitter.emit("data", parsedEvent);
             } catch (error) {
@@ -361,7 +366,7 @@ export default class PubSubApiClient {
                 : `Failed to parse event with unknown replay ID (latest replay ID was ${latestReplayId})`;
               const parseError = new EventParseError(
                 message,
-                error,
+                error as Error,
                 replayId,
                 event,
                 latestReplayId
@@ -483,7 +488,7 @@ export default class PubSubApiClient {
   async #fetchEventSchemaFromIdWithClient(schemaId) {
     return new Promise((resolve, reject) => {
       // @ts-ignore
-      this.#client.GetSchema({ schemaId }, (schemaError, res) => {
+      this.#client.getSchema({ schemaId }, (schemaError, res) => {
         if (schemaError) {
           reject(schemaError);
         } else {

@@ -6,35 +6,31 @@ import avro from 'avro-js';
  * This fixes a deserialization bug with Avro not supporting large values.
  * @private
  */
+console.log('avro.types.LongType', avro.types.LongType)
 export const CustomLongAvroType = avro.types.LongType.using({
-    // @ts-ignore
-    fromBuffer: (buf) => {
+    fromBuffer: (buf:Buffer) => {
         const big = buf.readBigInt64LE();
         if (big < Number.MIN_SAFE_INTEGER || big > Number.MAX_SAFE_INTEGER) {
             return big;
         }
         return Number(BigInt.asIntN(64, big));
     },
-    // @ts-ignore
-    toBuffer: (n) => {
-        const buf = Buffer.allocUnsafe(8);
-        if (n instanceof BigInt) {
-            // @ts-ignore
-            buf.writeBigInt64LE(n);
+    
+    toBuffer: (n:number | bigint) => {
+        const buf = Buffer.allocUnsafe(8)
+        if (typeof n === 'bigint') {
+        buf.writeBigInt64LE(n)
         } else {
-            buf.writeBigInt64LE(BigInt(n));
+        buf.writeBigInt64LE(BigInt(n))
         }
-        return buf;
+        return buf
     },
-    fromJSON: BigInt,
-    toJSON: Number,
-    // @ts-ignore
-    isValid: (n) => {
-        const type = typeof n;
-        return (type === 'number' && n % 1 === 0) || type === 'bigint';
+    fromJSON: (val: string) => BigInt(val),
+    toJSON: (val: bigint) => Number(val),
+    isValid: (n:unknown) => {
+        return (typeof n === 'number' && n % 1 === 0) || typeof n === 'bigint'
     },
-    // @ts-ignore
-    compare: (n1, n2) => {
+    compare: (n1: number | bigint, n2: number | bigint) => {
         return n1 === n2 ? 0 : n1 < n2 ? -1 : 1;
     }
 });
