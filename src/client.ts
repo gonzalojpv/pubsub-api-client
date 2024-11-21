@@ -348,8 +348,8 @@ export default class PubSubApiClient {
                 event.event.schemaId
               );
               // Parse event thanks to schema
-              console.log("Step-1", schema);
-              console.log("Step-2", event);
+              //console.log("Step-1", schema);
+              //console.log("Step-2", event);
               // @ts-ignore
               const parsedEvent = parseEvent(schema, event, console);
               this.#logger.debug(parsedEvent);
@@ -492,7 +492,7 @@ export default class PubSubApiClient {
         if (schemaError) {
           reject(schemaError);
         } else {
-          console.log("fetchEventSchemaFromIdWithClient:", res.schemaJson);
+          //console.log("fetchEventSchemaFromIdWithClient:", res.schemaJson);
           const schemaType = avro.parse(res.schemaJson, {
             registry: { long: CustomLongAvroType },
           });
@@ -503,5 +503,32 @@ export default class PubSubApiClient {
         }
       });
     });
+  }
+
+  /**
+   * Disconnects the Pub/Sub API client.
+   * @returns {Promise<void>} Promise that resolves once the client is disconnected
+   * @memberof PubSubApiClient.prototype
+   */
+  async disconnect() {
+    if (this.#client) {
+      try {
+        // Close all active subscriptions
+        for (const [topicName, subscription] of this.#subscriptions.entries()) {
+          subscription.end();
+          this.#subscriptions.delete(topicName);
+        }
+        this.#logger.info("All subscriptions have been closed.");
+
+        // Close the gRPC client
+        this.#client.close();
+        this.#client = null;
+        this.#logger.info("Disconnected from Pub/Sub API.");
+      } catch (error) {
+        throw new EventParseError("Failed to disconnect from Pub/Sub API", error as Error);
+      }
+    } else {
+      this.#logger.warn("Client is not connected.");
+    }
   }
 }
